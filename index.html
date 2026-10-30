@@ -1,0 +1,938 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sinexus-0012 芯桥通用命令行工具测试平台 v1.0</title>
+<!-- Bootstrap 4 (与原始系统前端一致) — 本地优先，CDN 兜底 -->
+<link rel="stylesheet" href="vendor/bootstrap.min.css" onerror="this.onerror=null;document.write('<link rel=\'stylesheet\' href=\'https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/css/bootstrap.min.css\'>')">
+<!-- Plotly.js (与原始系统图表库一致) — 本地优先，CDN 兜底 -->
+<script src="vendor/plotly.min.js" charset="utf-8" onerror="this.onerror=null;document.write('<script src=\'https://cdn.plot.ly/plotly-2.35.2.min.js\' charset=\'utf-8\'><\/script>')"></script>
+<style>
+  :root{
+    --brand:#3b5bdb;        /* indigo 品牌色 */
+    --brand-dark:#2f4bc0;
+    --panel:#eef2ff;        /* 浅靛蓝面板背景 */
+    --ink:#222;
+  }
+  body{background:#f4f6f8;color:var(--ink);font-size:14px;}
+  .navbar-brand{font-weight:700;letter-spacing:.5px;}
+  .navbar-brand .logo-dot{display:inline-block;width:12px;height:12px;border-radius:3px;background:var(--brand);margin-right:8px;vertical-align:middle;}
+  .nav-link.active{background:rgba(59,91,219,.22);border-radius:6px;color:#fff!important;font-weight:600;}
+  .view{display:none;}
+  .view.active{display:block;}
+  .panel{background:#fff;border:1px solid #e3e8ee;border-radius:10px;box-shadow:0 2px 10px rgba(20,40,60,.05);}
+  .panel-title{font-weight:700;font-size:15px;padding:12px 16px;border-bottom:1px solid #eef2f6;display:flex;align-items:center;justify-content:space-between;}
+  .panel-title .tag{font-size:12px;font-weight:500;color:#7a8a98;}
+  .panel-body{padding:0;}
+  .chart-wrap{width:100%;height:320px;}
+  .bg-panel{background:var(--panel)!important;}
+  .table thead th{background:#f0f3fb;border-top:none;font-size:12.5px;white-space:nowrap;}
+  .table td{font-size:13px;vertical-align:middle;}
+  .row-fail{color:#d6332e;font-weight:700;}
+  tr.row-fail td{background:#fff5f4;}
+  .badge-pass{background:#2f9e44;color:#fff;}
+  .badge-fail{background:#e03131;color:#fff;}
+  .badge-neutral{background:#868e96;color:#fff;}
+  .badge-warn{background:#f08c00;color:#fff;}
+  .pill{display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;background:#eef2f6;color:#566;}
+  .code{font-family:Consolas,Menlo,monospace;background:#f1f3f5;padding:1px 6px;border-radius:4px;font-size:12px;}
+  .clk{cursor:pointer;}
+  .filters label{font-weight:600;font-size:12px;color:#667;}
+  .stat-box{background:linear-gradient(135deg,#3b5bdb,#2f4bc0);color:#fff;border-radius:10px;padding:14px 16px;margin-bottom:14px;height:100%;}
+  .stat-box .n{font-size:26px;font-weight:800;line-height:1;}
+  .stat-box .l{font-size:12px;opacity:.92;margin-top:4px;}
+  .stat-box.green{background:linear-gradient(135deg,#2f9e44,#268a3a);}
+  .stat-box.orange{background:linear-gradient(135deg,#f08c00,#e67700);}
+  .stat-box.red{background:linear-gradient(135deg,#e03131,#c92a2a);}
+  .stat-box.teal{background:linear-gradient(135deg,#0c8599,#0b7285);}
+  .foot{padding:18px 0 40px;text-align:center;color:#9aa7b1;font-size:12px;}
+  .legend-note{font-size:11px;color:#8a97a3;padding:6px 16px;}
+  .modal .table td,.modal .table th{font-size:12.5px;}
+  .hl{background:#fff8c4!important;}
+  .toast-msg{position:fixed;right:18px;bottom:18px;z-index:2000;display:none;max-width:380px;}
+  .section-h{font-size:18px;font-weight:700;margin:4px 0 14px;}
+  .doc-tip{background:#fffaf0;border:1px solid #f3e2bf;color:#8a6d3b;border-radius:8px;padding:10px 14px;font-size:12.5px;margin-bottom:16px;}
+  .doc-tip b{color:#7a5a1f;}
+  .btn-brand{background:var(--brand);border-color:var(--brand);color:#fff;}
+  .btn-brand:hover{background:var(--brand-dark);border-color:var(--brand-dark);color:#fff;}
+  .console{background:#0b1f33;color:#7fe7c4;font-family:Consolas,Menlo,monospace;font-size:12px;border-radius:8px;padding:12px 14px;height:230px;overflow:auto;white-space:pre-wrap;}
+  .console .ok{color:#69db7c;}
+  .console .warn{color:#ffd43b;}
+  .console .err{color:#ff8787;}
+  .kv{font-size:13px;}
+  .kv .k{color:#777;width:140px;display:inline-block;}
+  /* ---- 实时 / 在线状态 ---- */
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(55,178,77,.55);}70%{box-shadow:0 0 0 7px rgba(55,178,77,0);}100%{box-shadow:0 0 0 0 rgba(55,178,77,0);}}
+  .dot-online{display:inline-block;width:9px;height:9px;border-radius:50%;background:#37b24d;margin-right:6px;animation:pulse 1.8s infinite;}
+  .dot-live{display:inline-block;width:9px;height:9px;border-radius:50%;background:#37b24d;margin-right:6px;animation:pulse 1.4s infinite;vertical-align:middle;}
+  #nav-clock{font-variant-numeric:tabular-nums;letter-spacing:.5px;}
+  .clk-wrap{display:flex;align-items:center;font-size:12px;}
+  @keyframes blink{0%,50%{opacity:1;}50.01%,100%{opacity:0;}}
+  .cursor{display:inline-block;animation:blink 1s steps(1) infinite;color:#7fe7c4;}
+  .refresh-tag{font-size:11px;color:#37b24d;font-weight:600;}
+</style>
+</head>
+<body>
+
+<!-- 顶部导航栏 -->
+<nav class="navbar navbar-expand-lg navbar-dark" style="background:#1f2d3d;">
+  <span class="navbar-brand"><span class="logo-dot"></span>Sinexus-0012 命令行工具测试平台</span>
+  <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#nav">
+    <span class="navbar-toggler-icon"></span>
+  </button>
+  <div class="collapse navbar-collapse" id="nav">
+    <ul class="navbar-nav mr-auto">
+      <li class="nav-item"><a class="nav-link active" data-view="overview" href="#">概览</a></li>
+      <li class="nav-item"><a class="nav-link" data-view="firmware" href="#">环境检查 / 固件</a></li>
+      <li class="nav-item"><a class="nav-link" data-view="fullstack" href="#">软件栈管理</a></li>
+      <li class="nav-item"><a class="nav-link" data-view="caserunner" href="#">用例上传 / 执行</a></li>
+      <li class="nav-item"><a class="nav-link" data-view="result" href="#">测试结果</a></li>
+      <li class="nav-item"><a class="nav-link" data-view="monitor" href="#">监控结果</a></li>
+      <li class="nav-item"><a class="nav-link" data-view="gpu" href="#">GPU 型号表</a></li>
+      <li class="nav-item"><a class="nav-link" data-view="error" href="#">系统错误</a></li>
+    </ul>
+    <span class="navbar-text text-light clk-wrap"><span class="dot-online"></span>集群在线 <span id="nav-online">3/3</span> · 系统时间 <span id="nav-clock">--:--:--</span></span>
+  </div>
+</nav>
+
+<div class="container-fluid pt-3">
+
+  <!-- ============ 1. 概览 ============ -->
+  <section class="view active" id="view-overview">
+    <div class="section-h">概览</div>
+    <div class="doc-tip">
+      芯桥通用命令行工具测试平台是基于 <b>Flask</b> 的命令行工具自动化验证系统：把「命令 + 期望返回」写入 Excel 即可对任意 remote 上的命令行工具做自动化校验。
+      使用流程（参考说明书第 3 章）：① 在 Dashboard 输入 <b>remote ip / host / password</b> 检查测试环境 → ② 上传 Excel 用例并 <b>Run Case</b> → ③ 查看<b>测试结果</b>（表格 + 饼图）与<b>监控结果</b>（多卡折线）→ ④ 检查 <b>dmesg</b> 系统错误。
+    </div>
+    <div class="row">
+      <div class="col-lg-3 col-md-6 mb-3"><div class="stat-box"><div class="n" id="ov-nodes">0</div><div class="l">远程节点（remote）</div></div></div>
+      <div class="col-lg-3 col-md-6 mb-3"><div class="stat-box teal"><div class="n" id="ov-cards">0</div><div class="l">监控加速卡总数（GPU）</div></div></div>
+      <div class="col-lg-3 col-md-6 mb-3"><div class="stat-box green"><div class="n" id="ov-passrate">0%</div><div class="l">用例通过率</div></div></div>
+      <div class="col-lg-3 col-md-6 mb-3"><div class="stat-box red"><div class="n" id="ov-errnodes">0</div><div class="l">存在 dmesg 错误的节点</div></div></div>
+    </div>
+    <div class="row">
+      <div class="col-lg-5 mb-3">
+        <div class="panel bg-panel">
+          <div class="panel-title">用例执行结果占比 <span class="tag">PASS / FAILED</span></div>
+          <div class="panel-body p-2"><div id="ov-pie" class="chart-wrap"></div></div>
+        </div>
+      </div>
+      <div class="col-lg-7 mb-3">
+        <div class="panel">
+          <div class="panel-title">最近测试运行 <span class="tag refresh-tag" id="ov-refresh">刚刚刷新</span></div>
+          <div class="panel-body p-2">
+            <div class="table-responsive">
+              <table class="table table-sm table-hover mb-0" id="ov-runs">
+                <thead><tr><th>时间</th><th>节点</th><th>用例数</th><th>通过</th><th>失败</th><th>状态</th></tr></thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="row">
+      <div class="col-12 mb-3">
+        <div class="panel bg-panel">
+          <div class="panel-title">监控示例：gpu-node-01 各卡功耗趋势 <span class="tag"><span class="dot-live"></span>实时 Power (W)</span></div>
+          <div class="panel-body p-2"><div id="ov-monitor" class="chart-wrap" style="height:300px;"></div></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 2. 环境检查 / 固件 ============ -->
+  <section class="view" id="view-firmware">
+    <div class="section-h">环境检查 / 固件（Dashboard）</div>
+    <div class="doc-tip">
+      在 Web 端 Dashboard 输入 <b>remote ip / host name / password</b> 后提交，平台调用 remote 上的 <span class="code">Sinexusmi</span> 工具查询 firmware 版本（若未安装 <span class="code">Sinexusmi</span>，后端自动安装 <span class="code">Sinexus_debug</span> 查询）。需要更新时，填入 <b>firmware url</b> 点击更新，远端执行更新程序并回显结果 / 报错（对应说明书 2.1）。
+    </div>
+    <div class="row">
+      <div class="col-lg-5 mb-3">
+        <div class="panel">
+          <div class="panel-title">检查 / 更新 Firmware</div>
+          <div class="panel-body p-3">
+            <div class="form-group">
+              <label class="font-weight-bold">Remote IP</label>
+              <select id="fw-ip" class="form-control form-control-sm"></select>
+            </div>
+            <div class="form-group">
+              <label class="font-weight-bold">Host Name</label>
+              <input id="fw-host" class="form-control form-control-sm" value="gpu-node-01">
+            </div>
+            <div class="form-group">
+              <label class="font-weight-bold">Password</label>
+              <input id="fw-pass" type="password" class="form-control form-control-sm" value="********">
+            </div>
+            <button class="btn btn-brand btn-sm" id="fw-check">检查 Firmware</button>
+            <hr>
+            <div class="form-group mb-1">
+              <label class="font-weight-bold">Firmware URL（更新用）</label>
+              <input id="fw-url" class="form-control form-control-sm" placeholder="http://mirror.Sinexus.com/fw/SINEXUS-FW-2.3.1.tar.gz">
+            </div>
+            <button class="btn btn-outline-primary btn-sm" id="fw-update">更新 Firmware</button>
+          </div>
+        </div>
+      </div>
+      <div class="col-lg-7 mb-3">
+        <div class="panel">
+          <div class="panel-title">查询结果 <span class="tag" id="fw-tag">尚未检查</span></div>
+          <div class="panel-body p-3">
+            <div id="fw-result">
+              <p class="text-muted">点击「检查 Firmware」查询该节点各加速卡固件版本。</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 3. 软件栈管理 ============ -->
+  <section class="view" id="view-fullstack">
+    <div class="section-h">软件栈管理（Full-Stack）</div>
+    <div class="doc-tip">
+      若 remote 缺少 <span class="code">Sinexus</span> 组件或其依赖，则无法测试；缺少 <span class="code">Sinexusmi</span> 则无法监控。在 Web 端输入 <b>remote ip</b> 与 <b>full-stack url</b>，即可在该远端「一键安装 Sinexus 软件栈」（说明书 2.2）。后端用正则匹配解压压缩包并进入目录安装。
+    </div>
+    <div class="row">
+      <div class="col-lg-5 mb-3">
+        <div class="panel">
+          <div class="panel-title">安装 Full-Stack</div>
+          <div class="panel-body p-3">
+            <div class="form-group">
+              <label class="font-weight-bold">Remote IP</label>
+              <select id="fs-ip" class="form-control form-control-sm"></select>
+            </div>
+            <div class="form-group">
+              <label class="font-weight-bold">Full-Stack URL</label>
+              <input id="fs-url" class="form-control form-control-sm" placeholder="http://mirror.Sinexus.com/stack/Sinexus-fullstack-1.8.2.tar.gz">
+            </div>
+            <button class="btn btn-brand btn-sm" id="fs-install">一键安装</button>
+            <div class="mt-3"><div class="console" id="fs-console">等待安装…</div></div>
+          </div>
+        </div>
+      </div>
+      <div class="col-lg-7 mb-3">
+        <div class="panel">
+          <div class="panel-title">安装历史</div>
+          <div class="panel-body p-2">
+            <div class="table-responsive">
+              <table class="table table-sm table-hover mb-0" id="fs-history">
+                <thead><tr><th>时间</th><th>节点</th><th>版本</th><th>状态</th></tr></thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 4. 用例上传 / 执行 ============ -->
+  <section class="view" id="view-caserunner">
+    <div class="section-h">用例上传 / 执行（CaseRunner）</div>
+    <div class="doc-tip">
+      平时以 <b>Excel</b> 管理命令行用例：每个 sheet 含 <span class="code">case_id</span> / <span class="code">cmd</span> / <span class="code">expected</span> 三列（均为 string，expected 支持正则）。在 caserunner 页面上传 Excel，返回 <b>load success</b>；点击 <b>Run Case</b> 后，用例同步到远端 remote 并批量执行，输出新的 report dataframe（说明书 2.3 / 2.4）。
+    </div>
+    <div class="row">
+      <div class="col-lg-6 mb-3">
+        <div class="panel">
+          <div class="panel-title">上传测试文件</div>
+          <div class="panel-body p-3">
+            <div class="form-group">
+              <label class="font-weight-bold">Remote IP（执行节点）</label>
+              <select id="cr-ip" class="form-control form-control-sm"></select>
+            </div>
+            <div class="form-group">
+              <label class="font-weight-bold">选择 Excel 用例文件</label>
+              <div class="custom-file">
+                <input type="file" class="form-control form-control-sm" id="cr-file" accept=".xlsx,.xls,.csv">
+              </div>
+              <small class="text-muted" id="cr-filehint">未选择文件时，将使用系统内置的标准用例集（case_id / cmd / expected）。</small>
+            </div>
+            <button class="btn btn-brand btn-sm" id="cr-upload">上传并加载</button>
+            <span id="cr-load" class="ml-2 font-weight-bold text-success" style="display:none;">load success ✓</span>
+            <div class="mt-3"><div class="console" id="cr-console">尚未上传文件。</div></div>
+          </div>
+        </div>
+      </div>
+      <div class="col-lg-6 mb-3">
+        <div class="panel">
+          <div class="panel-title">Excel 用例预览 <span class="tag">case_id / cmd / expected</span></div>
+          <div class="panel-body p-2">
+            <div class="table-responsive" style="max-height:300px;overflow:auto;">
+              <table class="table table-sm table-hover mb-0" id="cr-preview">
+                <thead><tr><th>case_id</th><th>cmd</th><th>expected</th></tr></thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="row">
+      <div class="col-12 mb-3">
+        <div class="panel">
+          <div class="panel-title">运行结果（Report） <span class="tag" id="cr-run-tag">未运行</span></div>
+          <div class="panel-body p-3">
+            <button class="btn btn-brand btn-sm mb-2" id="cr-run">Run Case</button>
+            <div class="table-responsive">
+              <table class="table table-sm table-hover mb-0" id="cr-report">
+                <thead><tr><th>case_id</th><th>cmd</th><th>expected</th><th>actual</th><th>result</th></tr></thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 5. 测试结果 ============ -->
+  <section class="view" id="view-result">
+    <div class="section-h">测试结果（Result）</div>
+    <div class="doc-tip">
+      测试结束后由中间页面展示全部 case 的匹配结果（dataframe → HTML 表格），并生成<b>结果饼图</b>：匹配成功返回 PASS，失败返回 FAILED（说明书 2.5.1）。失败的用例以红色加粗显示。
+    </div>
+    <div class="row">
+      <div class="col-lg-7 mb-3">
+        <div class="panel">
+          <div class="panel-body p-3">
+            <div class="filters form-inline mb-2">
+              <label class="mr-2">Status 过滤</label>
+              <select id="r-status" class="form-control form-control-sm mr-3">
+                <option value="ALL">全部</option><option value="PASS">PASS</option><option value="FAILED">FAILED</option>
+              </select>
+              <label class="mr-2">节点</label>
+              <select id="r-ip" class="form-control form-control-sm mr-3"></select>
+              <button class="btn btn-brand btn-sm" id="r-apply">Apply</button>
+            </div>
+            <div class="table-responsive">
+              <table class="table table-sm table-hover mb-0" id="result-table">
+                <thead><tr><th>case_id</th><th>cmd</th><th>expected</th><th>actual</th><th>result</th><th>节点</th></tr></thead>
+                <tbody></tbody>
+              </table>
+            </div>
+            <div class="legend-note" id="result-count"></div>
+          </div>
+        </div>
+      </div>
+      <div class="col-lg-5 mb-3">
+        <div class="panel bg-panel">
+          <div class="panel-title">结果饼图 <span class="tag">PASS / FAILED</span></div>
+          <div class="panel-body p-2"><div id="result-pie" class="chart-wrap" style="height:360px;"></div></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 6. 监控结果 ============ -->
+  <section class="view" id="view-monitor">
+    <div class="section-h">监控结果（Monitor）</section>
+    <div class="doc-tip">
+      点击 Run Case 的同时，平台调用 <span class="code">Sinexusmi</span> / <span class="code">Sinexusdebug</span> 监控 silicon 上的 <b>power / clock / memory utilization / spc utilization</b> 并写入 log；多线程并发调用，case 结束时 kill monitor。解析各卡 CSV 后绘制折线图，多卡展示在同一坐标系（说明书 2.4.2 / 2.5.1.2）。
+    </div>
+    <div class="panel">
+      <div class="panel-body p-3">
+        <div class="filters form-inline mb-2">
+          <label class="mr-2">节点</label>
+          <select id="m-ip" class="form-control form-control-sm mr-3"></select>
+          <label class="mr-2">监控指标</label>
+          <select id="m-metric" class="form-control form-control-sm mr-3">
+            <option value="power">Power (W)</option>
+            <option value="clock">Clock (MHz)</option>
+            <option value="memUtil">Memory Util (%)</option>
+            <option value="spcUtil">SPC Util (%)</option>
+          </select>
+          <span class="legend-note mb-0"><span class="dot-live"></span>实时采集中</span>
+          <span class="legend-note mb-0" id="m-live" style="color:#37b24d;font-weight:600;"></span>
+        </div>
+        <div id="monitor-chart" class="chart-wrap" style="height:440px;"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ GPU 型号表 ============ -->
+  <section class="view" id="view-gpu">
+    <div class="section-h">GPU 型号表</div>
+    <div class="doc-tip">本系统覆盖的加速卡型号仅包含 <b>X200</b> 与 <b>S200</b> 两款（芯桥自研）。下表为型号关键规格概览。</div>
+    <div class="panel">
+      <div class="panel-title">芯桥 GPU 型号一览 <span class="tag">仅 X200 / S200</span></div>
+      <div class="panel-body p-3">
+        <div class="table-responsive">
+          <table class="table table-sm table-bordered mb-0" id="gpu-table">
+            <thead class="thead-dark">
+              <tr><th>型号</th><th>FP16 算力 (TOPS)</th><th>FP32 算力 (TFLOPS)</th><th>显存</th><th>功耗</th><th>状态</th></tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 7. 系统错误 ============ -->
+  <section class="view" id="view-error">
+    <div class="section-h">系统错误（dmesg ErrorPage）</div>
+    <div class="doc-tip">
+      测试结束后调用 <span class="code">dmesg</span> 写入 log，并解析其中是否包含 <span class="code">aer</span> 等关键错误；若有则在 ErrorPage 展示，无则返回 <b>“haven't dmesg error”</b>（说明书 2.6）。
+    </div>
+    <div class="panel">
+      <div class="panel-body p-3">
+        <button class="btn btn-brand btn-sm mb-2" id="err-scan">扫描 dmesg 错误</button>
+        <div id="err-result"></div>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+<!-- 通用确认 / 结果 弹窗 -->
+<div class="modal fade" id="msgModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header"><h5 class="modal-title" id="msgTitle">提示</h5>
+        <button type="button" class="close" data-dismiss="modal">&times;</button></div>
+      <div class="modal-body" id="msgBody"></div>
+      <div class="modal-footer"><button type="button" class="btn btn-primary" data-dismiss="modal">确定</button></div>
+    </div>
+  </div>
+</div>
+
+<div class="toast-msg alert alert-success" id="toast"></div>
+
+<script src="vendor/jquery.slim.min.js" onerror="this.onerror=null;document.write('<script src=\'https://cdn.jsdelivr.net/npm/jquery@3.5.1/dist/jquery.slim.min.js\'><\/script>')"></script>
+<script src="vendor/bootstrap.bundle.min.js" onerror="this.onerror=null;document.write('<script src=\'https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/js/bootstrap.bundle.min.js\'><\/script>')"></script>
+<script>
+/* ============================================================
+   模拟数据生成（seeded，保证数据可复现）
+   ============================================================ */
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+const rand=mulberry32(20261027);
+const pick=arr=>arr[Math.floor(rand()*arr.length)];
+const ri=(a,b)=>a+Math.floor(rand()*(b-a+1));
+const rf=(a,b)=>a+rand()*(b-a);
+
+/* 演示基准时间：所有时间轴 / 历史数据统一锚定到 2026-11-06，保持实时滚动与时钟走动 */
+const DEMO_BASE=new Date(2026,10,6,14,30,0); // 2026-11-06 14:30:00
+const PAGE_LOAD=Date.now();
+function demoNow(){ return new Date(DEMO_BASE.getTime()+(Date.now()-PAGE_LOAD)); }
+const NOW=DEMO_BASE;
+function minsAgo(m){const x=new Date(NOW);x.setMinutes(x.getMinutes()-m);return x;}
+function hrsAgo(h){const x=new Date(NOW);x.setHours(x.getHours()-h);return x;}
+function relTime(d){
+  const diff=(demoNow()-d)/1000;
+  if(diff<60) return '刚刚';
+  if(diff<3600) return Math.floor(diff/60)+' 分钟前';
+  if(diff<86400) return Math.floor(diff/3600)+' 小时前';
+  if(diff<172800) return '昨天 '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
+  return fmtDate(d);
+}
+const fmt=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")} ${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`;
+const fmtDate=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+const statusBadge=s=> s==='FAILED'?'<span class="badge badge-fail">FAILED</span>': s==='PASS'?'<span class="badge badge-pass">PASS</span>':'<span class="badge badge-neutral">NULL</span>';
+
+/* ---- 远程节点 ---- */
+const remotes=[
+  {ip:"10.9.0.101", host:"gpu-node-01", user:"root", cards:4, fwTarget:"SINEXUS-FW-2.3.1", fwActual:"SINEXUS-FW-2.3.1", fullstack:"Sinexus-fullstack-1.8.2"},
+  {ip:"10.9.0.102", host:"gpu-node-02", user:"root", cards:4, fwTarget:"SINEXUS-FW-2.3.1", fwActual:"SINEXUS-FW-2.3.0", fullstack:"Sinexus-fullstack-1.8.1"},
+  {ip:"10.9.0.103", host:"gpu-node-03", user:"root", cards:8, fwTarget:"SINEXUS-FW-2.3.1", fwActual:"SINEXUS-FW-2.2.9", fullstack:"Sinexus-fullstack-1.7.9"},
+];
+const totalCards=remotes.reduce((s,r)=>s+r.cards,0);
+
+/* ---- 命令行用例模板（case_id / cmd / expected） ---- */
+const caseTemplates=[
+  {case_id:"TC-001", cmd:"Sinexusmi -d 0 -q clock",          expected:"1500",        note:"查询 0 号卡时钟频率"},
+  {case_id:"TC-002", cmd:"Sinexusmi -d 0 -q power",          expected:"^\\d+\\.\\d+ W$", note:"查询 0 号卡功耗"},
+  {case_id:"TC-003", cmd:"Sinexusmi -d 1 -q temp",           expected:"^\\d+ C$",    note:"查询 1 号卡温度"},
+  {case_id:"TC-004", cmd:"npu-smi info -d 0",            expected:".*X200.*",    note:"确认 0 号卡型号 X200"},
+  {case_id:"TC-005", cmd:"Sinexus_test --mem-bandwidth -d 0",  expected:"PASS",        note:"0 号卡显存带宽测试"},
+  {case_id:"TC-006", cmd:"Sinexus_test --mem-bandwidth -d 1",  expected:"PASS",        note:"1 号卡显存带宽测试"},
+  {case_id:"TC-007", cmd:"Sinexus_debug --check-link -d 0",    expected:"link up",     note:"0 号卡 PCIe 链路状态"},
+  {case_id:"TC-008", cmd:"ls /opt/Sinexus/",               expected:".*full-stack.*", note:"检查 full-stack 已安装"},
+  {case_id:"TC-009", cmd:"Sinexus-smi -q -d 0 | grep Temp",expected:".*Temp.*",    note:"查询 0 号卡温度信息"},
+  {case_id:"TC-010", cmd:"Sinexusmi -d 0 -q mem-util",        expected:"^\\d+%$",     note:"查询 0 号卡显存占用"},
+  {case_id:"TC-011", cmd:"Sinexusmi -d 2 -q clock",          expected:"1500",        note:"查询 2 号卡时钟频率"},
+  {case_id:"TC-012", cmd:"Sinexusmi -d 2 -q power",          expected:"^\\d+\\.\\d+ W$", note:"查询 2 号卡功耗"},
+  {case_id:"TC-013", cmd:"Sinexus_test --compute -d 0",        expected:"PASS",        note:"0 号卡算力正确性测试"},
+  {case_id:"TC-014", cmd:"Sinexus_test --compute -d 1",        expected:"PASS",        note:"1 号卡算力正确性测试"},
+  {case_id:"TC-015", cmd:"Sinexus_debug --firmware -d 0",      expected:".*SINEXUS-FW.*",note:"查询 0 号卡固件版本"},
+  {case_id:"TC-016", cmd:"npu-smi info -d 1",            expected:".*X200.*",    note:"确认 1 号卡型号 X200"},
+  {case_id:"TC-017", cmd:"ipmitool sensor | grep 'GPU Power'", expected:".*Watts.*", note:"查询整机 GPU 功耗"},
+  {case_id:"TC-018", cmd:"Sinexusmi -d 3 -q temp",           expected:"^\\d+ C$",    note:"查询 3 号卡温度"},
+  {case_id:"TC-019", cmd:"Sinexus_test --stress -d 0 --time 60", expected:"PASS",      note:"0 号卡 60s 压力测试"},
+  {case_id:"TC-020", cmd:"dmesg | grep -i aer",           expected:"",            note:"检查是否有 PCIe AER 错误"},
+  {case_id:"TC-021", cmd:"Sinexusmi -d 1 -q mem-util",        expected:"^\\d+%$",     note:"查询 1 号卡显存占用"},
+  {case_id:"TC-022", cmd:"Sinexus_test --ecc -d 0",            expected:"PASS",        note:"0 号卡 ECC 测试"},
+  {case_id:"TC-023", cmd:"Sinexus-smi -L",                  expected:".*X200.*",    note:"列出全部加速卡"},
+  {case_id:"TC-024", cmd:"Sinexus_debug --version",            expected:".*2\\.\\d+\\.\\d+.*", note:"查询 Sinexus_debug 版本"},
+];
+function passOutput(t){
+  const e=t.expected;
+  if(e==="") return "";
+  if(e.indexOf("MHz")>=0) return "1500 MHz";
+  if(e.indexOf("W$")>=0) return rf(280,300).toFixed(1)+" W";
+  if(e.indexOf("C$")>=0) return ri(55,70)+" C";
+  if(e.indexOf("%$")>=0) return ri(20,90)+" %";
+  if(e.indexOf("X200")>=0) return "Device 0: Sinexus X200";
+  if(e.indexOf("full-stack")>=0) return "full-stack  Sinexus-smi  Sinexusmi  Sinexus";
+  if(e.indexOf("SINEXUS-FW")>=0) return "SINEXUS-FW-2.3.1";
+  if(e.indexOf("Temp")>=0) return "Temperature: 62 C";
+  if(e.indexOf("Watts")>=0) return "GPU Power: 287 Watts";
+  if(e.indexOf("2\\.")>=0) return "Sinexus_debug version 2.3.1";
+  if(e.indexOf("link up")>=0) return "link up";
+  if(e.indexOf("PASS")>=0) return "PASS";
+  return "ok";
+}
+
+/* 为每个节点生成一份「最近一次运行」的用例结果 */
+const runOffsets=[minsAgo(4), hrsAgo(3), hrsAgo(6)]; // 与 remotes 顺序对应，均为 2026-11-06 当天（近 / 中 / 早）
+const runs=[]; // {date, ip, cases:[{...case, actual, result}]}
+remotes.forEach((r,ri2)=>{
+  const cases=caseTemplates.map(t=>{
+    const fail = rand()<0.16;
+    const actual = fail ? "FAIL" : passOutput(t);
+    return {...t, actual, result: fail?"FAILED":"PASS"};
+  });
+  const pass=cases.filter(c=>c.result==="PASS").length;
+  const fail=cases.filter(c=>c.result==="FAILED").length;
+  runs.push({date:runOffsets[ri2%runOffsets.length], ip:r.ip, cases, pass, fail, total:cases.length});
+});
+/* 全量结果（用于测试结果页 / 概览饼图） */
+let allResults=[];
+runs.forEach(run=>run.cases.forEach(c=>allResults.push({...c, ip:run.ip, date:run.date})));
+const totalPass=allResults.filter(r=>r.result==="PASS").length;
+const totalFail=allResults.filter(r=>r.result==="FAILED").length;
+
+/* ---- 监控数据：每个节点每张卡的 4 项指标时间序列 ---- */
+const MON_T=60;
+const monitor={};
+remotes.forEach(r=>{
+  monitor[r.ip]=[];
+  for(let c=0;c<r.cards;c++){
+    const bP=rf(270,310), bC=rf(1450,1530), bM=rf(40,80), bS=rf(30,70);
+    const power=[],clock=[],memUtil=[],spcUtil=[];
+    for(let t=0;t<MON_T;t++){
+      power.push(+(bP + Math.sin(t/6+c)*15 + rf(-5,5)).toFixed(1));
+      clock.push(+(bC + Math.sin(t/7+c)*20 + rf(-4,4)).toFixed(0));
+      memUtil.push(+(Math.min(98,Math.max(5,bM + Math.sin(t/5+c*1.3)*20 + rf(-3,3)))).toFixed(0));
+      spcUtil.push(+(Math.min(98,Math.max(2,bS + Math.sin(t/4+c)*25 + rf(-4,4)))).toFixed(0));
+    }
+    monitor[r.ip].push({card:c, power, clock, memUtil, spcUtil});
+  }
+});
+const METRIC_LABEL={power:"Power (W)",clock:"Clock (MHz)",memUtil:"Memory Util (%)",spcUtil:"SPC Util (%)"};
+const CARD_COLORS=['#3b5bdb','#e8590c','#2f9e44','#9c36b5','#0c8599','#e03131','#f08c00','#495057'];
+
+/* ---- dmesg 错误：仅 gpu-node-02 存在 aer 错误 ---- */
+const dmesgErrors={
+  "10.9.0.101":[],
+  "10.9.0.102":[
+    {ts:"[ 1234.567123]", msg:"aer: Corrected error received: id=0000:00:01.0", level:"Corrected"},
+    {ts:"[ 1235.102344]", msg:"pcieport 0000:00:01.0: AER: Corrected error, bits=Receiver Error", level:"Corrected"},
+    {ts:"[ 1567.880213]", msg:"aer: Uncorrected (Non-Fatal) error received: id=0000:00:02.0", level:"Non-Fatal"},
+  ],
+  "10.9.0.103":[],
+};
+
+/* ============================================================
+   视图切换
+   ============================================================ */
+function showView(name){
+  document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+  document.getElementById('view-'+name).classList.add('active');
+  document.querySelectorAll('.nav-link').forEach(a=>a.classList.toggle('active', a.dataset.view===name));
+  if(name==='overview'){ renderOverview(); startLive('overview'); }
+  else if(name==='monitor'){ renderMonitor(); }
+  else{
+    stopLive();
+    if(name==='firmware') renderFirmwareInit();
+    if(name==='fullstack') renderFsInit();
+    if(name==='caserunner') renderCrInit();
+    if(name==='result') renderResult();
+    if(name==='gpu') renderGpu();
+    if(name==='error') renderError();
+  }
+}
+document.querySelectorAll('.nav-link').forEach(a=>a.addEventListener('click',e=>{e.preventDefault();showView(a.dataset.view);}));
+
+/* ============================================================
+   1. 概览
+   ============================================================ */
+function renderOverview(){
+  document.getElementById('ov-nodes').textContent=remotes.length;
+  document.getElementById('ov-cards').textContent=totalCards;
+  document.getElementById('ov-passrate').textContent=(totalPass/(totalPass+totalFail)*100).toFixed(1)+'%';
+  const errNodes=Object.values(dmesgErrors).filter(a=>a.length>0).length;
+  document.getElementById('ov-errnodes').textContent=errNodes;
+
+  Plotly.newPlot('ov-pie',[{
+    type:'pie', labels:['PASS','FAILED'], values:[totalPass,totalFail],
+    textinfo:'label+percent', hole:.0,
+    marker:{colors:['#2f9e44','#e03131']}
+  }],{margin:{t:10,b:10,l:10,r:10},showlegend:true,title:{text:`共 ${totalPass+totalFail} 条用例`,font:{size:13}}},{displayModeBar:false,responsive:true});
+
+  // 最近运行表
+  const tb=document.querySelector('#ov-runs tbody'); tb.innerHTML='';
+  runs.slice().sort((a,b)=>b.date-a.date).forEach(run=>{
+    tb.insertAdjacentHTML('beforeend',`<tr>
+      <td>${relTime(run.date)}</td><td>${run.ip}</td><td>${run.total}</td>
+      <td class="text-success">${run.pass}</td><td class="text-danger">${run.fail}</td>
+      <td>${statusBadge(run.fail>0?'FAILED':'PASS')}</td></tr>`);
+  });
+
+  // 监控示例：gpu-node-01 各卡功耗（实时滚动曲线，由 startLive('overview') 统一绘制，时间轴锚定 2026-11-06）
+}
+
+/* ============================================================
+   2. 环境检查 / 固件
+   ============================================================ */
+function fillIpSelect(sel, withAll){
+  if(sel.options.length) return; // 已填充则不再重置（保留用户选择）
+  let html = withAll ? '<option value="ALL">全部节点</option>' : '';
+  html += remotes.map(r=>`<option value="${r.ip}">${r.ip}（${r.host}）</option>`).join('');
+  sel.innerHTML = html;
+}
+function renderFirmwareInit(){ fillIpSelect(document.getElementById('fw-ip')); }
+document.getElementById('fw-check').onclick=async()=>{
+  const ip=document.getElementById('fw-ip').value;
+  const r=remotes.find(x=>x.ip===ip);
+  document.getElementById('fw-tag').textContent='查询中 · '+ip;
+  const con=document.getElementById('fw-result');
+  con.innerHTML='<div class="console" id="fw-console"></div>';
+  const tool=rand()<0.5?'Sinexusmi':'Sinexus_debug（自动安装）';
+  await streamLines(document.getElementById('fw-console'),[
+    {text:`[INFO] SSH 连接 ${r.ip} (${r.host}) ...`},
+    {text:`[INFO] 调用 ${tool} 查询各卡 firmware 版本 ...`},
+    {text:`[OK] 已读取 ${r.cards} 张加速卡固件信息`, cls:'ok'},
+  ],{delay:300});
+  let rows='';
+  for(let c=0;c<r.cards;c++){
+    const ver=r.fwActual;
+    const ok = ver===r.fwTarget;
+    rows+=`<tr><td>GPU${c}</td><td><span class="code">${ver}</span></td>
+      <td>${ok?'<span class="badge badge-pass">一致</span>':'<span class="badge badge-warn">需更新 → '+r.fwTarget+'</span>'}</td></tr>`;
+  }
+  con.innerHTML=`
+    <div class="kv mb-2"><span class="k">Remote IP</span>${r.ip}<br>
+      <span class="k">Host</span>${r.host}<br>
+      <span class="k">查询工具</span>${tool}<br>
+      <span class="k">目标版本</span><span class="code">${r.fwTarget}</span></div>
+    <table class="table table-sm table-bordered mb-0"><thead class="thead-light">
+      <tr><th>加速卡</th><th>Firmware 版本</th><th>状态</th></tr></thead><tbody>${rows}</tbody></table>`;
+  document.getElementById('fw-tag').textContent='已检查 · '+ip;
+  toast('Firmware 检查完成');
+};
+document.getElementById('fw-update').onclick=async()=>{
+  const ip=document.getElementById('fw-ip').value;
+  const url=document.getElementById('fw-url').value.trim();
+  const r=remotes.find(x=>x.ip===ip);
+  if(!url){ showMsg('提示','请填写 Firmware URL 后再更新。'); return; }
+  document.getElementById('fw-tag').textContent='更新中 · '+ip;
+  const con=document.getElementById('fw-result');
+  con.innerHTML='<div class="console" id="fw-console"></div>';
+  const c=document.getElementById('fw-console');
+  await streamLines(c,[
+    {text:`[INFO] 连接到 ${r.ip} (${r.host})`},
+    {text:`[INFO] 下载固件包：${url}`},
+    {text:`[INFO] 校验签名 ... OK`, cls:'ok'},
+    {text:`[INFO] 在远端执行更新程序 ...`},
+  ],{delay:320, cursor:false});
+  for(let k=0;k<r.cards;k++){
+    c.insertAdjacentHTML('beforeend',`<div class="ok">[OK] GPU${k} 更新至 ${r.fwTarget}</div>`);
+    c.scrollTop=c.scrollHeight; await sleep(260);
+  }
+  c.insertAdjacentHTML('beforeend',`<div class="ok">[DONE] 全部 ${r.cards} 张卡更新完成</div><div class="cursor">▋</div>`);
+  r.fwActual=r.fwTarget;
+  con.insertAdjacentHTML('beforeend',`<div class="mt-2"><span class="badge badge-pass">更新成功</span> 节点 ${r.ip} 已升级至 ${r.fwTarget}。</div>`);
+  document.getElementById('fw-tag').textContent='已更新 · '+ip;
+  toast('Firmware 更新成功');
+};
+
+/* ============================================================
+   3. 软件栈管理
+   ============================================================ */
+let fsHistory=[
+  {date:hrsAgo(6),  ip:"10.9.0.101", ver:"Sinexus-fullstack-1.8.2", status:"成功"},
+  {date:hrsAgo(3),  ip:"10.9.0.102", ver:"Sinexus-fullstack-1.8.1", status:"成功"},
+  {date:minsAgo(50),ip:"10.9.0.103", ver:"Sinexus-fullstack-1.7.9", status:"成功"},
+];
+function renderFsInit(){ fillIpSelect(document.getElementById('fs-ip')); }
+document.getElementById('fs-install').onclick=async()=>{
+  const ip=document.getElementById('fs-ip').value;
+  const url=document.getElementById('fs-url').value.trim();
+  const r=remotes.find(x=>x.ip===ip);
+  if(!url){ showMsg('提示','请填写 Full-Stack URL 后再安装。'); return; }
+  const con=document.getElementById('fs-console');
+  const fn=url.split('/').pop().replace(/\.tar\.gz$/,'');
+  await streamLines(con,[
+    {text:`[INFO] 连接到 ${r.ip} (${r.host})`},
+    {text:`[INFO] 下载 full-stack 包：${url}`},
+    {text:`[INFO] 解压并正则匹配目录 ...`},
+    {text:`[OK] 进入目录 ${fn}`, cls:'ok'},
+    {text:`[INFO] 执行一键安装 Sinexus 软件栈 ...`},
+    {text:`[OK] Sinexus 组件已就绪`, cls:'ok'},
+    {text:`[OK] Sinexusmi / Sinexusdebug 已就绪（监控可用）`, cls:'ok'},
+    {text:`[DONE] ${fn} 安装完成`, cls:'ok'},
+  ],{delay:300, cursor:false});
+  r.fullstack=fn;
+  fsHistory.unshift({date:demoNow(), ip:r.ip, ver:fn, status:'成功'});
+  renderFsHistory();
+  toast('Full-Stack 安装完成');
+};
+function renderFsHistory(){
+  const tb=document.querySelector('#fs-history tbody'); tb.innerHTML='';
+  if(!fsHistory.length){
+    tb.innerHTML='<tr><td colspan="4" class="text-muted">暂无安装记录。</td></tr>'; return;
+  }
+  fsHistory.forEach(h=>{
+    tb.insertAdjacentHTML('beforeend',`<tr><td>${fmt(h.date)}</td><td>${h.ip}</td>
+      <td><span class="code">${h.ver}</span></td><td><span class="badge badge-pass">${h.status}</span></td></tr>`);
+  });
+}
+
+/* ============================================================
+   4. 用例上传 / 执行
+   ============================================================ */
+let crLoaded=false;
+function renderCrInit(){
+  fillIpSelect(document.getElementById('cr-ip'));
+  const tb=document.querySelector('#cr-preview tbody'); tb.innerHTML='';
+  caseTemplates.forEach(t=>{
+    tb.insertAdjacentHTML('beforeend',`<tr><td>${t.case_id}</td><td><span class="code">${t.cmd}</span></td><td><span class="code">${t.expected||'(空)'}</span></td></tr>`);
+  });
+}
+document.getElementById('cr-upload').onclick=async()=>{
+  const ip=document.getElementById('cr-ip').value;
+  document.getElementById('cr-load').style.display='inline';
+  const con=document.getElementById('cr-console');
+  await streamLines(con,[
+    {text:`[INFO] 上传 Excel 用例文件到 server …`},
+    {text:`[OK] load success`, cls:'ok'},
+    {text:`[INFO] 同步用例文件到远端 ${ip} …`},
+    {text:`[OK] 已同步至 remote host`, cls:'ok'},
+    {text:`[INFO] 共加载 ${caseTemplates.length} 条用例（case_id / cmd / expected）`},
+  ],{delay:280, cursor:false});
+  crLoaded=true;
+  toast('用例加载成功');
+};
+document.getElementById('cr-run').onclick=async()=>{
+  if(!crLoaded){ showMsg('提示','请先「上传并加载」用例文件。'); return; }
+  const ip=document.getElementById('cr-ip').value;
+  const run=runs.find(x=>x.ip===ip) || runs[0];
+  const con=document.getElementById('cr-console');
+  const tb=document.querySelector('#cr-report tbody'); tb.innerHTML='';
+  document.getElementById('cr-run-tag').textContent='执行中 …';
+  await streamLines(con,[
+    {text:`[INFO] 开始批量执行用例集（${run.cases.length} 条）于 ${ip}`},
+    {text:`[INFO] 用例同步到 remote 并逐条运行 ...`},
+  ],{delay:300, cursor:false});
+  let pass=0, fail=0;
+  for(const c of run.cases){
+    const ok=c.result==='PASS';
+    con.insertAdjacentHTML('beforeend',`<div class="${ok?'ok':'err'}">[${ok?'PASS':'FAIL'}] ${c.case_id}  ${c.cmd}</div>`);
+    con.scrollTop=con.scrollHeight;
+    if(ok)pass++; else fail++;
+    tb.insertAdjacentHTML('beforeend',`<tr class="${c.result==='FAILED'?'row-fail':''}">
+      <td>${c.case_id}</td><td><span class="code">${c.cmd}</span></td>
+      <td><span class="code">${c.expected||'(空)'}</span></td><td><span class="code">${c.actual||'(空)'}</span></td>
+      <td>${statusBadge(c.result)}</td></tr>`);
+    await sleep(110);
+  }
+  con.insertAdjacentHTML('beforeend',`<div class="ok">[DONE] 执行完成：${pass} PASS / ${fail} FAILED</div><div class="cursor">▋</div>`);
+  document.getElementById('cr-run-tag').textContent=`已运行 · ${pass} PASS / ${fail} FAILED`;
+  toast('Run Case 完成，已生成 report');
+};
+
+/* ============================================================
+   5. 测试结果
+   ============================================================ */
+let rFilter={status:'ALL', ip:'ALL'};
+function renderResult(){
+  fillIpSelect(document.getElementById('r-ip'), true);
+  const data=allResults.filter(r=>
+    (rFilter.status==='ALL'||r.result===rFilter.status)&&
+    (rFilter.ip==='ALL'||r.ip===rFilter.ip));
+  const tb=document.querySelector('#result-table tbody'); tb.innerHTML='';
+  data.forEach(r=>{
+    tb.insertAdjacentHTML('beforeend',`<tr class="${r.result==='FAILED'?'row-fail':''}">
+      <td>${r.case_id}</td><td><span class="code">${r.cmd}</span></td>
+      <td><span class="code">${r.expected||'(空)'}</span></td><td><span class="code">${r.actual||'(空)'}</span></td>
+      <td>${statusBadge(r.result)}</td><td>${r.ip}</td></tr>`);
+  });
+  document.getElementById('result-count').textContent=`共 ${data.length} 条（全量 ${allResults.length} 条，PASS ${totalPass} / FAILED ${totalFail}）`;
+  Plotly.newPlot('result-pie',[{
+    type:'pie', labels:['PASS','FAILED'], values:[totalPass,totalFail],
+    textinfo:'label+percent', hole:.35,
+    marker:{colors:['#2f9e44','#e03131']}
+  }],{margin:{t:20,b:20,l:20,r:20},showlegend:true,title:{text:'用例执行结果',font:{size:14}}},{displayModeBar:false,responsive:true});
+}
+document.getElementById('r-apply').onclick=()=>{
+  rFilter={status:document.getElementById('r-status').value, ip:document.getElementById('r-ip').value};
+  renderResult();
+};
+
+/* ============================================================
+   GPU 型号表（仅 X200 / S200）
+   ============================================================ */
+const GPU_MODELS=[
+  {model:"X200", fp16:1381.64, fp32:612.14, mem:"64GB HBM3", power:"300W", status:"量产"},
+  {model:"S200", fp16:690.82,  fp32:306.07, mem:"32GB HBM3", power:"150W", status:"量产"},
+];
+function renderGpu(){
+  const tb=document.querySelector('#gpu-table tbody'); tb.innerHTML='';
+  GPU_MODELS.forEach(g=>{
+    tb.insertAdjacentHTML('beforeend',`<tr>
+      <td><b>${g.model}</b></td>
+      <td>${g.fp16}</td><td>${g.fp32}</td><td>${g.mem}</td><td>${g.power}</td>
+      <td><span class="badge badge-pass">${g.status}</span></td></tr>`);
+  });
+}
+
+/* ============================================================
+   6. 监控结果（实时滚动）
+   ============================================================ */
+const LIVE_N=40, LIVE_MS=1200;
+let liveTimer=null, liveIp=null, liveMetric=null, liveT=0, liveBuf=null, liveTs=null, liveDiv=null, liveView=null;
+function metricDec(m){return m==='power'?1:0;}
+function clampLive(m,v){
+  if(m==='power')   return Math.min(350,Math.max(250,v));
+  if(m==='clock')   return Math.min(1600,Math.max(1400,v));
+  if(m==='memUtil'||m==='spcUtil') return Math.min(98,Math.max(2,v));
+  return v;
+}
+function initLiveBuf(ip){
+  liveBuf={}; liveTs=[];
+  const base=demoNow();
+  for(let k=0;k<LIVE_N;k++) liveTs.push(new Date(base.getTime()-(LIVE_N-1-k)*LIVE_MS));
+  monitor[ip].forEach(card=>{
+    liveBuf[card.card]={
+      power:  card.power.slice(-LIVE_N).slice(),
+      clock:  card.clock.slice(-LIVE_N).slice(),
+      memUtil:card.memUtil.slice(-LIVE_N).slice(),
+      spcUtil:card.spcUtil.slice(-LIVE_N).slice(),
+    };
+  });
+}
+function liveStep(){
+  liveT++;
+  monitor[liveIp].forEach(card=>{
+    const b=liveBuf[card.card];
+    ['power','clock','memUtil','spcUtil'].forEach(m=>{
+      const arr=b[m], last=arr[arr.length-1];
+      const amp = m==='power'?6 : m==='clock'?12 : m==='memUtil'?4 : 6;
+      let v=last + (Math.random()*2-1)*amp;
+      v=clampLive(m,v);
+      arr.push(+v.toFixed(metricDec(m))); arr.shift();
+    });
+  });
+  liveTs.push(demoNow()); liveTs.shift();
+  drawLive();
+}
+function drawLive(){
+  const traces=monitor[liveIp].map((card,i)=>{
+    return {x:liveTs, y:liveBuf[card.card][liveMetric], name:'GPU'+card.card,
+      mode:'lines', line:{color:CARD_COLORS[i%CARD_COLORS.length], width:2}};
+  });
+  Plotly.react(liveDiv,traces,
+    {margin:{t:20,r:10,b:45,l:50},legend:{orientation:'h',y:-0.25},
+     xaxis:{title:'时间 (2026-11-06)', tickformat:'%H:%M:%S', tickfont:{size:9}},yaxis:{title:METRIC_LABEL[liveMetric]}},
+    {displayModeBar:false,responsive:true});
+  const t=demoNow();
+  const el=document.getElementById('m-live');
+  if(el) el.textContent='最近更新 '+fmt(t).slice(11)+'（2026-11-06）';
+}
+function startLive(view){
+  stopLive();
+  liveView=view;
+  if(view==='monitor'){
+    liveIp=document.getElementById('m-ip').value;
+    liveMetric=document.getElementById('m-metric').value;
+    liveDiv='monitor-chart';
+  }else{ // overview 概览示例
+    liveIp=remotes[0].ip;
+    liveMetric='power';
+    liveDiv='ov-monitor';
+  }
+  liveT=LIVE_N;
+  initLiveBuf(liveIp);
+  drawLive();
+  liveTimer=setInterval(liveStep,1200);
+}
+function stopLive(){ if(liveTimer){clearInterval(liveTimer);liveTimer=null;} }
+function renderMonitor(){
+  fillIpSelect(document.getElementById('m-ip'));
+  startLive('monitor');
+}
+document.getElementById('m-ip').onchange=()=>startLive('monitor');
+document.getElementById('m-metric').onchange=()=>startLive('monitor');
+
+/* ============================================================
+   7. 系统错误
+   ============================================================ */
+function renderError(){
+  document.getElementById('err-result').innerHTML='<p class="text-muted">点击「扫描 dmesg 错误」解析各节点日志。</p>';
+}
+document.getElementById('err-scan').onclick=async()=>{
+  const el=document.getElementById('err-result');
+  el.innerHTML='<div class="console" id="err-console"></div>';
+  const c=document.getElementById('err-console');
+  await streamLines(c, remotes.map(r=>({text:`[SCAN] 解析 ${r.ip} (${r.host}) dmesg 日志 ...`})), {delay:420, cursor:false});
+  let html='';
+  remotes.forEach(r=>{
+    const errs=dmesgErrors[r.ip]||[];
+    if(errs.length===0){
+      html+=`<div class="alert alert-success py-2 px-3 mb-2"><b>${r.ip}（${r.host}）</b> ：haven't dmesg error ✓</div>`;
+    }else{
+      let rows=errs.map(e=>`<tr><td><span class="code">${e.ts}</span></td><td>${e.msg}</td>
+        <td><span class="badge ${e.level==='Non-Fatal'?'badge-fail':'badge-warn'}">${e.level}</span></td></tr>`).join('');
+      html+=`<div class="alert alert-danger py-2 px-3 mb-2"><b>${r.ip}（${r.host}）</b> ：检测到 ${errs.length} 条关键错误（aer）</div>
+        <div class="table-responsive mb-3"><table class="table table-sm table-bordered mb-0">
+          <thead class="thead-light"><tr><th>时间</th><th>日志</th><th>级别</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+    }
+  });
+  el.insertAdjacentHTML('beforeend', html);
+  toast('dmesg 扫描完成');
+};
+
+/* ============================================================
+   通用提示 & 初始化
+   ============================================================ */
+function showMsg(title,body){document.getElementById('msgTitle').textContent=title;document.getElementById('msgBody').innerHTML=body;$('#msgModal').modal('show');}
+function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.style.display='block';setTimeout(()=>t.style.display='none',2600);}
+
+/* 流式控制台输出：逐行带延迟打印，结尾闪烁光标，营造“正在执行”的真实感 */
+function sleep(ms){return new Promise(r=>setTimeout(r,ms));}
+async function streamLines(el, lines, opts){
+  opts=opts||{}; const delay=opts.delay||300;
+  el.innerHTML='';
+  for(const ln of lines){
+    const text=(typeof ln==='string')?ln:ln.text;
+    const cls =(typeof ln==='string')?(opts.cls||''):(ln.cls||'');
+    el.insertAdjacentHTML('beforeend',`<div class="${cls}">${text}</div>`);
+    el.scrollTop=el.scrollHeight;
+    await sleep(delay);
+  }
+  if(opts.cursor!==false) el.insertAdjacentHTML('beforeend',`<div class="cursor">▋</div>`);
+}
+
+/* 实时时钟 + 在线状态 + 概览刷新指示 */
+function tickClock(){
+  const d=demoNow();
+  const s=`${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}:${String(d.getSeconds()).padStart(2,'0')}`;
+  const clk=document.getElementById('nav-clock'); if(clk) clk.textContent=s;
+}
+let refreshBase=Date.now();
+function tickRefresh(){
+  const sec=Math.floor((Date.now()-refreshBase)/1000);
+  const el=document.getElementById('ov-refresh'); if(el) el.textContent='刷新于 '+sec+'s 前';
+}
+setInterval(tickClock,1000); tickClock();
+setInterval(tickRefresh,1000);
+const _on=document.getElementById('nav-online'); if(_on) _on.textContent=remotes.length+'/'+remotes.length;
+
+renderFsHistory();
+showView('overview');
+</script>
+</body>
+</html>
