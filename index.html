@@ -4,10 +4,10 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Sinexus-0012 芯桥通用命令行工具测试平台 v1.0</title>
-<!-- Bootstrap 4 (与原始系统前端一致) — 本地优先，CDN 兜底 -->
-<link rel="stylesheet" href="vendor/bootstrap.min.css" onerror="this.onerror=null;document.write('<link rel=\'stylesheet\' href=\'https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/css/bootstrap.min.css\'>')">
-<!-- Plotly.js (与原始系统图表库一致) — 本地优先，CDN 兜底 -->
-<script src="vendor/plotly.min.js" charset="utf-8" onerror="this.onerror=null;document.write('<script src=\'https://cdn.plot.ly/plotly-2.35.2.min.js\' charset=\'utf-8\'><\/script>')"></script>
+<!-- Bootstrap 4 CSS — CDN 优先，加载失败回退本地 vendor（部署时 vendor 可能未发布） -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/css/bootstrap.min.css"
+      onerror="this.onerror=null;this.href='vendor/bootstrap.min.css';">
+<!-- 说明：jQuery / Bootstrap JS / Plotly 由页面底部的「依赖加载器」按顺序串行加载（CDN 优先，失败回退 vendor） -->
 <style>
   :root{
     --brand:#3b5bdb;        /* indigo 品牌色 */
@@ -92,7 +92,12 @@
       <li class="nav-item"><a class="nav-link" data-view="gpu" href="#">GPU 型号表</a></li>
       <li class="nav-item"><a class="nav-link" data-view="error" href="#">系统错误</a></li>
     </ul>
-    <span class="navbar-text text-light clk-wrap"><span class="dot-online"></span>集群在线 <span id="nav-online">3/3</span> · 系统时间 <span id="nav-clock">--:--:--</span></span>
+    <span class="navbar-text text-light clk-wrap" id="nav-live">
+      <span class="dot-live" id="nav-live-dot"></span><span id="live-state">实时</span>
+      <span class="mx-2">·</span>集群在线 <span id="nav-online">3/3</span>
+      <span class="mx-2">·</span>系统时间 <span id="nav-clock">--:--:--</span>
+      <button class="btn btn-sm btn-outline-light py-0 px-2 ml-3" id="live-pause">⏸ 暂停实时</button>
+    </span>
   </div>
 </nav>
 
@@ -133,10 +138,40 @@
       </div>
     </div>
     <div class="row">
+      <div class="col-lg-7 mb-3">
+        <div class="panel bg-panel">
+          <div class="panel-title">近 30 天用例通过率趋势 <span class="tag">2026-10-08 ~ 2026-11-06</span></div>
+          <div class="panel-body p-2"><div id="ov-trend" class="chart-wrap" style="height:260px;"></div></div>
+        </div>
+      </div>
+      <div class="col-lg-5 mb-3">
+        <div class="panel">
+          <div class="panel-title">当前执行批次 <span class="tag" id="batch-tag">空闲</span></div>
+          <div class="panel-body p-3">
+            <div class="kv mb-2"><span class="k">批次 ID</span><span class="code" id="batch-id">-</span></div>
+            <div class="kv mb-2"><span class="k">目标节点</span><span id="batch-ip">-</span></div>
+            <div class="kv mb-2"><span class="k">已执行 / 总数</span><span id="batch-count">0 / 24</span></div>
+            <div class="progress" style="height:20px;">
+              <div class="progress-bar progress-bar-striped progress-bar-animated bg-success" id="batch-bar" style="width:0%;">0%</div>
+            </div>
+            <div class="legend-note px-0 mt-2">通过 <b id="batch-pass">0</b> · 失败 <b id="batch-fail" class="text-danger">0</b> &nbsp;|&nbsp; 每 4.5s 自动演进</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="row">
       <div class="col-12 mb-3">
         <div class="panel bg-panel">
           <div class="panel-title">监控示例：gpu-node-01 各卡功耗趋势 <span class="tag"><span class="dot-live"></span>实时 Power (W)</span></div>
           <div class="panel-body p-2"><div id="ov-monitor" class="chart-wrap" style="height:300px;"></div></div>
+        </div>
+      </div>
+    </div>
+    <div class="row">
+      <div class="col-12 mb-3">
+        <div class="panel">
+          <div class="panel-title">实时活动 <span class="tag"><span class="dot-live"></span>Live Activity · 用例执行流</span></div>
+          <div class="panel-body"><div class="console" id="activity-log" style="height:160px;border-radius:0 0 10px 10px;"></div></div>
         </div>
       </div>
     </div>
@@ -328,7 +363,7 @@
 
   <!-- ============ 6. 监控结果 ============ -->
   <section class="view" id="view-monitor">
-    <div class="section-h">监控结果（Monitor）</section>
+    <div class="section-h">监控结果（Monitor）</div>
     <div class="doc-tip">
       点击 Run Case 的同时，平台调用 <span class="code">Sinexusmi</span> / <span class="code">Sinexusdebug</span> 监控 silicon 上的 <b>power / clock / memory utilization / spc utilization</b> 并写入 log；多线程并发调用，case 结束时 kill monitor。解析各卡 CSV 后绘制折线图，多卡展示在同一坐标系（说明书 2.4.2 / 2.5.1.2）。
     </div>
@@ -385,6 +420,8 @@
     </div>
   </section>
 
+  <div class="foot">数据均为模拟演示数据 · Sinexus-0012 芯桥通用命令行工具测试平台 v1.0</div>
+
 </div>
 
 <!-- 通用确认 / 结果 弹窗 -->
@@ -401,9 +438,9 @@
 
 <div class="toast-msg alert alert-success" id="toast"></div>
 
-<script src="vendor/jquery.slim.min.js" onerror="this.onerror=null;document.write('<script src=\'https://cdn.jsdelivr.net/npm/jquery@3.5.1/dist/jquery.slim.min.js\'><\/script>')"></script>
-<script src="vendor/bootstrap.bundle.min.js" onerror="this.onerror=null;document.write('<script src=\'https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/js/bootstrap.bundle.min.js\'><\/script>')"></script>
 <script>
+/* 应用初始化入口：依赖（jQuery → Bootstrap → Plotly）就绪后由页面底部的加载器调用 */
+window.__initApp=function(){
 /* ============================================================
    模拟数据生成（seeded，保证数据可复现）
    ============================================================ */
@@ -413,10 +450,15 @@ const pick=arr=>arr[Math.floor(rand()*arr.length)];
 const ri=(a,b)=>a+Math.floor(rand()*(b-a+1));
 const rf=(a,b)=>a+rand()*(b-a);
 
-/* 演示基准时间：所有时间轴 / 历史数据统一锚定到 2026-11-06，保持实时滚动与时钟走动 */
-const DEMO_BASE=new Date(2026,10,6,14,30,0); // 2026-11-06 14:30:00
+/* 演示基准时间：所有时间轴 / 历史数据统一锚定到 2026-11-06 09:30:00（页面所有时间戳均由 demoNow() 生成） */
+const DEMO_BASE=new Date(2026,10,6,9,30,0); // 2026-11-06 09:30:00
 const PAGE_LOAD=Date.now();
-function demoNow(){ return new Date(DEMO_BASE.getTime()+(Date.now()-PAGE_LOAD)); }
+let DEMO_OFFSET=0;                                  // 累计的“暂停冻结”毫秒
+let paused=false, pauseAt=0, frozenNow=null;        // 实时演算暂停状态
+function demoNow(){
+  if(paused && frozenNow) return new Date(frozenNow.getTime());
+  return new Date(DEMO_BASE.getTime()+(Date.now()-PAGE_LOAD-DEMO_OFFSET));
+}
 const NOW=DEMO_BASE;
 function minsAgo(m){const x=new Date(NOW);x.setMinutes(x.getMinutes()-m);return x;}
 function hrsAgo(h){const x=new Date(NOW);x.setHours(x.getHours()-h);return x;}
@@ -501,8 +543,20 @@ remotes.forEach((r,ri2)=>{
 /* 全量结果（用于测试结果页 / 概览饼图） */
 let allResults=[];
 runs.forEach(run=>run.cases.forEach(c=>allResults.push({...c, ip:run.ip, date:run.date})));
-const totalPass=allResults.filter(r=>r.result==="PASS").length;
-const totalFail=allResults.filter(r=>r.result==="FAILED").length;
+let totalPass=allResults.filter(r=>r.result==="PASS").length;
+let totalFail=allResults.filter(r=>r.result==="FAILED").length;
+
+/* ---- 近 30 天通过率趋势（2026-10-08 ~ 2026-11-06，右端落在演示当天） ---- */
+const TREND_DAYS=30;
+const trendData=(function(){
+  const arr=[], end=new Date(2026,10,6,0,0,0);
+  for(let i=TREND_DAYS-1;i>=0;i--){
+    const d=new Date(end); d.setDate(d.getDate()-i);
+    const rate=88 + Math.sin(i/3)*4 + rf(-2.5,2.5);
+    arr.push({date:fmtDate(d), rate:+Math.min(99.2,Math.max(80,rate)).toFixed(1), cases:ri(120,260)});
+  }
+  return arr;
+})();
 
 /* ---- 监控数据：每个节点每张卡的 4 项指标时间序列 ---- */
 const MON_T=60;
@@ -562,26 +616,52 @@ document.querySelectorAll('.nav-link').forEach(a=>a.addEventListener('click',e=>
 function renderOverview(){
   document.getElementById('ov-nodes').textContent=remotes.length;
   document.getElementById('ov-cards').textContent=totalCards;
-  document.getElementById('ov-passrate').textContent=(totalPass/(totalPass+totalFail)*100).toFixed(1)+'%';
   const errNodes=Object.values(dmesgErrors).filter(a=>a.length>0).length;
   document.getElementById('ov-errnodes').textContent=errNodes;
+  updateKpis();
+  renderTrend();
+  renderBatch();
+  // 监控示例（实时滚动）由 startLive('overview') 统一绘制，时间轴锚定 2026-11-06
+}
 
-  Plotly.newPlot('ov-pie',[{
-    type:'pie', labels:['PASS','FAILED'], values:[totalPass,totalFail],
-    textinfo:'label+percent', hole:.0,
-    marker:{colors:['#2f9e44','#e03131']}
-  }],{margin:{t:10,b:10,l:10,r:10},showlegend:true,title:{text:`共 ${totalPass+totalFail} 条用例`,font:{size:13}}},{displayModeBar:false,responsive:true});
-
-  // 最近运行表
-  const tb=document.querySelector('#ov-runs tbody'); tb.innerHTML='';
-  runs.slice().sort((a,b)=>b.date-a.date).forEach(run=>{
+/* ---- KPI / 饼图 / 最近运行表：统一刷新入口（Plotly.react 平滑更新不闪屏） ---- */
+function updateKpis(){
+  const rate=(totalPass/(totalPass+totalFail)*100).toFixed(1)+'%';
+  const p=document.getElementById('ov-passrate'); if(p) p.textContent=rate;
+  const pie=document.getElementById('ov-pie');
+  if(pie && window.Plotly){
+    Plotly.react(pie,[{
+      type:'pie', labels:['PASS','FAILED'], values:[totalPass,totalFail],
+      textinfo:'label+percent', hole:.0, marker:{colors:['#2f9e44','#e03131']}
+    }],{margin:{t:10,b:10,l:10,r:10},showlegend:true,title:{text:`共 ${totalPass+totalFail} 条用例`,font:{size:13}}},
+      {displayModeBar:false,responsive:true});
+  }
+  renderRunsTable();
+}
+function renderRunsTable(){
+  const tb=document.querySelector('#ov-runs tbody'); if(!tb) return;
+  tb.innerHTML='';
+  runs.slice().sort((a,b)=>b.date-a.date).slice(0,12).forEach(run=>{
     tb.insertAdjacentHTML('beforeend',`<tr>
       <td>${relTime(run.date)}</td><td>${run.ip}</td><td>${run.total}</td>
       <td class="text-success">${run.pass}</td><td class="text-danger">${run.fail}</td>
       <td>${statusBadge(run.fail>0?'FAILED':'PASS')}</td></tr>`);
   });
+}
 
-  // 监控示例：gpu-node-01 各卡功耗（实时滚动曲线，由 startLive('overview') 统一绘制，时间轴锚定 2026-11-06）
+/* ---- 近 30 天通过率趋势图 ---- */
+function renderTrend(){
+  const el=document.getElementById('ov-trend'); if(!el || !window.Plotly) return;
+  const x=trendData.map(d=>d.date), y=trendData.map(d=>d.rate);
+  Plotly.react(el,[{
+    x, y, mode:'lines+markers', name:'通过率 %',
+    line:{color:'#3b5bdb',width:2}, marker:{size:4,color:'#3b5bdb'},
+    fill:'tozeroy', fillcolor:'rgba(59,91,219,.08)'
+  }],{margin:{t:10,r:14,b:42,l:46},
+     yaxis:{title:'通过率 (%)',range:[75,100],tickfont:{size:9}},
+     xaxis:{tickfont:{size:8},nticks:8,tickangle:-30},
+     hovermode:'x unified'},
+    {displayModeBar:false,responsive:true});
 }
 
 /* ============================================================
@@ -815,6 +895,7 @@ function initLiveBuf(ip){
   });
 }
 function liveStep(){
+  if(paused) return;
   liveT++;
   monitor[liveIp].forEach(card=>{
     const b=liveBuf[card.card];
@@ -830,6 +911,7 @@ function liveStep(){
   drawLive();
 }
 function drawLive(){
+  if(!window.Plotly) return;
   const traces=monitor[liveIp].map((card,i)=>{
     return {x:liveTs, y:liveBuf[card.card][liveMetric], name:'GPU'+card.card,
       mode:'lines', line:{color:CARD_COLORS[i%CARD_COLORS.length], width:2}};
@@ -916,6 +998,91 @@ async function streamLines(el, lines, opts){
   if(opts.cursor!==false) el.insertAdjacentHTML('beforeend',`<div class="cursor">▋</div>`);
 }
 
+/* ============================================================
+   实时活动日志 + 当前执行批次自动演进 + 暂停
+   ============================================================ */
+const BATCH_SIZE=24;
+let liveBatch=null, batchSeq=1;
+
+function logAct(cls,text){
+  const el=document.getElementById('activity-log'); if(!el) return;
+  const d=demoNow();
+  const ts=[d.getHours(),d.getMinutes(),d.getSeconds()].map(v=>String(v).padStart(2,'0')).join(':');
+  const div=document.createElement('div');
+  div.className=cls||'';
+  div.textContent='['+ts+'] '+text;
+  el.appendChild(div);
+  while(el.childNodes.length>180 && el.firstChild) el.removeChild(el.firstChild);
+  el.scrollTop=el.scrollHeight;
+}
+
+function startBatch(){
+  const r=remotes[Math.floor(rand()*remotes.length)];
+  const id='RUN-20261106-'+String(batchSeq++).padStart(4,'0');
+  liveBatch={id, ip:r.ip, host:r.host, total:BATCH_SIZE, done:0, pass:0, fail:0, cases:[]};
+  logAct('info',`[DISPATCH] 批次 ${id} 已分发至 ${r.ip}（${r.host}），共 ${BATCH_SIZE} 条用例`);
+  renderBatch();
+}
+
+function batchStep(){
+  if(paused) return;
+  if(!liveBatch) startBatch();
+  const b=liveBatch;
+  const n=1+Math.floor(rand()*2);
+  for(let k=0;k<n && b.done<b.total;k++){
+    const t=caseTemplates[b.done % caseTemplates.length];
+    const failed=rand()<0.12;
+    const actual=failed ? 'FAIL' : passOutput(t);
+    b.done++; if(failed) b.fail++; else b.pass++;
+    b.cases.push({...t, actual, result: failed?'FAILED':'PASS'});
+    logAct(failed?'err':'ok', `${b.id}  ${t.case_id}  ${t.cmd}  → ${failed?'FAILED':'PASS'}`);
+  }
+  if(b.done>=b.total){
+    logAct('ok',`[DONE] 批次 ${b.id} 完成：${b.pass} PASS / ${b.fail} FAILED`);
+    const when=demoNow();
+    runs.unshift({date:when, ip:b.ip, cases:b.cases.slice(), pass:b.pass, fail:b.fail, total:b.total});
+    b.cases.forEach(c=>allResults.push({...c, ip:b.ip, date:when}));
+    totalPass+=b.pass; totalFail+=b.fail;
+    liveBatch=null;
+    updateKpis();
+    setTimeout(()=>{ if(!paused) startBatch(); }, 1200);
+  }
+  renderBatch();
+}
+
+function renderBatch(){
+  const b=liveBatch;
+  const set=(id,v)=>{const e=document.getElementById(id); if(e) e.textContent=v;};
+  if(!b){ set('batch-tag','空闲'); return; }
+  set('batch-id',b.id);
+  set('batch-ip',b.ip+'（'+b.host+'）');
+  set('batch-count',b.done+' / '+b.total);
+  set('batch-pass',b.pass);
+  set('batch-fail',b.fail);
+  const pct=Math.round(b.done/b.total*100);
+  set('batch-tag','运行中 · '+pct+'%');
+  const bar=document.getElementById('batch-bar');
+  if(bar){ bar.style.width=pct+'%'; bar.textContent=pct+'%'; }
+}
+
+/* 暂停 / 继续实时（讲解时定格） */
+function setPaused(p){
+  const btn=document.getElementById('live-pause');
+  const st=document.getElementById('live-state');
+  const dot=document.getElementById('nav-live-dot');
+  if(p && !paused){
+    frozenNow=demoNow(); paused=true; pauseAt=Date.now();
+    if(btn) btn.innerHTML='▶ 继续实时';
+    if(st) st.textContent='已暂停';
+    if(dot){ dot.style.animationPlayState='paused'; dot.style.background='#adb5bd'; }
+  }else if(!p && paused){
+    DEMO_OFFSET += Date.now()-pauseAt; paused=false; frozenNow=null;
+    if(btn) btn.innerHTML='⏸ 暂停实时';
+    if(st) st.textContent='实时';
+    if(dot){ dot.style.animationPlayState=''; dot.style.background=''; }
+  }
+}
+
 /* 实时时钟 + 在线状态 + 概览刷新指示 */
 function tickClock(){
   const d=demoNow();
@@ -924,15 +1091,60 @@ function tickClock(){
 }
 let refreshBase=Date.now();
 function tickRefresh(){
-  const sec=Math.floor((Date.now()-refreshBase)/1000);
+  if(paused) return;
+  const sec=Math.floor((Date.now()-refreshBase-DEMO_OFFSET)/1000);
   const el=document.getElementById('ov-refresh'); if(el) el.textContent='刷新于 '+sec+'s 前';
 }
 setInterval(tickClock,1000); tickClock();
 setInterval(tickRefresh,1000);
 const _on=document.getElementById('nav-online'); if(_on) _on.textContent=remotes.length+'/'+remotes.length;
 
+const _pauseBtn=document.getElementById('live-pause');
+if(_pauseBtn) _pauseBtn.onclick=()=>setPaused(!paused);
+
+startBatch();
+setInterval(batchStep,4500);
+
 renderFsHistory();
 showView('overview');
+logAct('info','[SYS] 命令行工具测试平台已就绪，监控采集启动');
+
+};  /* ==== end window.__initApp ==== */
+
+/* ============================================================
+   依赖加载器：CDN 优先，失败回退本地 vendor
+   顺序串行加载 jQuery → Bootstrap JS → Plotly，全部就绪后再初始化应用
+   ============================================================ */
+(function(){
+  var DEPS=[
+    {u:'https://cdn.jsdelivr.net/npm/jquery@3.5.1/dist/jquery.slim.min.js', f:'vendor/jquery.slim.min.js'},
+    {u:'https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/js/bootstrap.bundle.min.js', f:'vendor/bootstrap.bundle.min.js'},
+    {u:'https://cdn.plot.ly/plotly-2.35.2.min.js', f:'vendor/plotly.min.js'}
+  ];
+  function runApp(){
+    if(typeof window.__initApp==='function'){
+      var fn=window.__initApp; window.__initApp=null;
+      try{ fn(); }catch(e){ console.error('[init]', e); }
+    }
+  }
+  function load(i){
+    if(i>=DEPS.length){ runApp(); return; }
+    var d=DEPS[i];
+    function fallback(){
+      var s=document.createElement('script');
+      s.src=d.f; s.async=false;
+      s.onload=function(){ load(i+1); };
+      s.onerror=function(){ load(i+1); };
+      document.head.appendChild(s);
+    }
+    var s=document.createElement('script');
+    s.src=d.u; s.async=false;
+    s.onload=function(){ load(i+1); };
+    s.onerror=fallback;
+    document.head.appendChild(s);
+  }
+  load(0);
+})();
 </script>
 </body>
 </html>
