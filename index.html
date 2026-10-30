@@ -95,7 +95,7 @@
     <span class="navbar-text text-light clk-wrap" id="nav-live">
       <span class="dot-live" id="nav-live-dot"></span><span id="live-state">实时</span>
       <span class="mx-2">·</span>集群在线 <span id="nav-online">3/3</span>
-      <span class="mx-2">·</span>系统时间 <span id="nav-clock">--:--:--</span>
+      <span class="mx-2">·</span>系统时间 <span id="nav-date">----------</span> <span id="nav-clock">--:--:--</span>
       <button class="btn btn-sm btn-outline-light py-0 px-2 ml-3" id="live-pause">⏸ 暂停实时</button>
     </span>
   </div>
@@ -140,7 +140,7 @@
     <div class="row">
       <div class="col-lg-7 mb-3">
         <div class="panel bg-panel">
-          <div class="panel-title">近 30 天用例通过率趋势 <span class="tag">2026-10-08 ~ 2026-11-06</span></div>
+          <div class="panel-title">近 30 天用例通过率趋势 <span class="tag" id="trend-range">--</span></div>
           <div class="panel-body p-2"><div id="ov-trend" class="chart-wrap" style="height:260px;"></div></div>
         </div>
       </div>
@@ -450,16 +450,18 @@ const pick=arr=>arr[Math.floor(rand()*arr.length)];
 const ri=(a,b)=>a+Math.floor(rand()*(b-a+1));
 const rf=(a,b)=>a+rand()*(b-a);
 
-/* 演示基准时间：所有时间轴 / 历史数据统一锚定到 2026-11-06 09:30:00（页面所有时间戳均由 demoNow() 生成） */
-const DEMO_BASE=new Date(2026,10,6,9,30,0); // 2026-11-06 09:30:00
-const PAGE_LOAD=Date.now();
+/* 时间基准：直接对齐系统真实当前时间——页面所有时间戳均由 demoNow() 生成，
+   与操作系统时钟完全一致（历史数据按“几分钟前 / 几小时前”相对现在回溯） */
+const PAGE_LOAD=new Date();                         // 打开页面的真实时刻
+const NOW=PAGE_LOAD;                                // 历史数据以此为基准回溯
 let DEMO_OFFSET=0;                                  // 累计的“暂停冻结”毫秒
 let paused=false, pauseAt=0, frozenNow=null;        // 实时演算暂停状态
 function demoNow(){
   if(paused && frozenNow) return new Date(frozenNow.getTime());
-  return new Date(DEMO_BASE.getTime()+(Date.now()-PAGE_LOAD-DEMO_OFFSET));
+  return new Date(Date.now()-DEMO_OFFSET);          // = 系统当前时间（扣除暂停时长）
 }
-const NOW=DEMO_BASE;
+const pad2=n=>String(n).padStart(2,'0');
+const ymd=d=>''+d.getFullYear()+pad2(d.getMonth()+1)+pad2(d.getDate()); // 20261030
 function minsAgo(m){const x=new Date(NOW);x.setMinutes(x.getMinutes()-m);return x;}
 function hrsAgo(h){const x=new Date(NOW);x.setHours(x.getHours()-h);return x;}
 function relTime(d){
@@ -528,7 +530,7 @@ function passOutput(t){
 }
 
 /* 为每个节点生成一份「最近一次运行」的用例结果 */
-const runOffsets=[minsAgo(4), hrsAgo(3), hrsAgo(6)]; // 与 remotes 顺序对应，均为 2026-11-06 当天（近 / 中 / 早）
+const runOffsets=[minsAgo(4), hrsAgo(3), hrsAgo(6)]; // 与 remotes 顺序对应，按“4 分钟前 / 3 小时前 / 6 小时前”相对当前时间回溯
 const runs=[]; // {date, ip, cases:[{...case, actual, result}]}
 remotes.forEach((r,ri2)=>{
   const cases=caseTemplates.map(t=>{
@@ -546,10 +548,10 @@ runs.forEach(run=>run.cases.forEach(c=>allResults.push({...c, ip:run.ip, date:ru
 let totalPass=allResults.filter(r=>r.result==="PASS").length;
 let totalFail=allResults.filter(r=>r.result==="FAILED").length;
 
-/* ---- 近 30 天通过率趋势（2026-10-08 ~ 2026-11-06，右端落在演示当天） ---- */
+/* ---- 近 30 天通过率趋势（截至“今天”，即系统当前日期往前 30 天） ---- */
 const TREND_DAYS=30;
 const trendData=(function(){
-  const arr=[], end=new Date(2026,10,6,0,0,0);
+  const arr=[], end=new Date(NOW.getFullYear(),NOW.getMonth(),NOW.getDate(),0,0,0);
   for(let i=TREND_DAYS-1;i>=0;i--){
     const d=new Date(end); d.setDate(d.getDate()-i);
     const rate=88 + Math.sin(i/3)*4 + rf(-2.5,2.5);
@@ -621,7 +623,7 @@ function renderOverview(){
   updateKpis();
   renderTrend();
   renderBatch();
-  // 监控示例（实时滚动）由 startLive('overview') 统一绘制，时间轴锚定 2026-11-06
+  // 监控示例（实时滚动）由 startLive('overview') 统一绘制，时间轴跟随系统当前时间
 }
 
 /* ---- KPI / 饼图 / 最近运行表：统一刷新入口（Plotly.react 平滑更新不闪屏） ---- */
@@ -653,6 +655,8 @@ function renderRunsTable(){
 function renderTrend(){
   const el=document.getElementById('ov-trend'); if(!el || !window.Plotly) return;
   const x=trendData.map(d=>d.date), y=trendData.map(d=>d.rate);
+  const rng=document.getElementById('trend-range');
+  if(rng && trendData.length) rng.textContent=trendData[0].date+' ~ '+trendData[trendData.length-1].date;
   Plotly.react(el,[{
     x, y, mode:'lines+markers', name:'通过率 %',
     line:{color:'#3b5bdb',width:2}, marker:{size:4,color:'#3b5bdb'},
@@ -918,11 +922,11 @@ function drawLive(){
   });
   Plotly.react(liveDiv,traces,
     {margin:{t:20,r:10,b:45,l:50},legend:{orientation:'h',y:-0.25},
-     xaxis:{title:'时间 (2026-11-06)', tickformat:'%H:%M:%S', tickfont:{size:9}},yaxis:{title:METRIC_LABEL[liveMetric]}},
+     xaxis:{title:'时间 ('+fmtDate(demoNow())+')', tickformat:'%H:%M:%S', tickfont:{size:9}},yaxis:{title:METRIC_LABEL[liveMetric]}},
     {displayModeBar:false,responsive:true});
   const t=demoNow();
   const el=document.getElementById('m-live');
-  if(el) el.textContent='最近更新 '+fmt(t).slice(11)+'（2026-11-06）';
+  if(el) el.textContent='最近更新 '+fmt(t).slice(11)+'（'+fmtDate(t)+'）';
 }
 function startLive(view){
   stopLive();
@@ -960,7 +964,8 @@ document.getElementById('err-scan').onclick=async()=>{
   el.innerHTML='<div class="console" id="err-console"></div>';
   const c=document.getElementById('err-console');
   await streamLines(c, remotes.map(r=>({text:`[SCAN] 解析 ${r.ip} (${r.host}) dmesg 日志 ...`})), {delay:420, cursor:false});
-  let html='';
+  const scanAt=demoNow();
+  let html=`<div class="text-muted mb-2" style="font-size:12px;">采集时间：<span class="code">${fmt(scanAt)}:${pad2(scanAt.getSeconds())}</span> · 共 ${remotes.length} 个节点</div>`;
   remotes.forEach(r=>{
     const errs=dmesgErrors[r.ip]||[];
     if(errs.length===0){
@@ -1018,7 +1023,7 @@ function logAct(cls,text){
 
 function startBatch(){
   const r=remotes[Math.floor(rand()*remotes.length)];
-  const id='RUN-20261106-'+String(batchSeq++).padStart(4,'0');
+  const id='RUN-'+ymd(demoNow())+'-'+String(batchSeq++).padStart(4,'0');
   liveBatch={id, ip:r.ip, host:r.host, total:BATCH_SIZE, done:0, pass:0, fail:0, cases:[]};
   logAct('info',`[DISPATCH] 批次 ${id} 已分发至 ${r.ip}（${r.host}），共 ${BATCH_SIZE} 条用例`);
   renderBatch();
@@ -1088,6 +1093,7 @@ function tickClock(){
   const d=demoNow();
   const s=`${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}:${String(d.getSeconds()).padStart(2,'0')}`;
   const clk=document.getElementById('nav-clock'); if(clk) clk.textContent=s;
+  const dt=document.getElementById('nav-date'); if(dt) dt.textContent=fmtDate(d);
 }
 let refreshBase=Date.now();
 function tickRefresh(){
